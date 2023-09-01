@@ -37,22 +37,146 @@
         function initMap() {
             @if (!empty($kmlContent))
                 var kmlContent = `{!! $kmlContent !!}`;
-                if (isKMLValid(kmlContent)) {
-                    console.log('Valid KML file.');
+                var parser = new DOMParser();
+                var xmlDoc = parser.parseFromString(kmlContent, 'text/xml');
+                var placemarks = xmlDoc.getElementsByTagName('Placemark');
+                var styles = xmlDoc.getElementsByTagName('Style');
+                var coordinates = [];
+                if (placemarks[0].querySelector('Point')) {
+                    coordinates = placemarks[0].querySelector('Point coordinates').textContent.split(',');
                     var map = new google.maps.Map(document.getElementById('map'), {
                         center: {
-                            lat: {!! $defaultCoordinates['latitude'] !!},
-                            lng: {!! $defaultCoordinates['longitude'] !!}
+                            lat: parseFloat(coordinates[1]),
+                            lng: parseFloat(coordinates[0])
                         },
-                        zoom: 11
+                        zoom: 10
                     });
-
-                    var kmlLayer = new google.maps.KmlLayer({
-                        url: 'data:application/xml;base64,' + btoa(),
-                        map: map
+                } else if (placemarks[0].querySelector('Polygon')) {
+                    var coords = placemarks[0].querySelectorAll('Polygon coordinates')[0].textContent;
+                    coords = coords.split('\n              ').map(function(coord) {
+                        var latLng = coord.split(',');
+                        if (!isNaN(latLng[1]) && !isNaN(latLng[0])) {
+                            coordinates.push({
+                                lat: parseFloat(latLng[1]),
+                                lng: parseFloat(latLng[0])
+                            });
+                        }
                     });
-                } else {
-                    console.log('Invalid KML file.');
+                    var map = new google.maps.Map(document.getElementById('map'), {
+                        center: {
+                            lat: parseFloat(coordinates[0]['lat']),
+                            lng: parseFloat(coordinates[0]['lng'])
+                        },
+                        zoom: 10
+                    });
+                } else if (placemarks[0].querySelector('LineString')) {
+                    var coords = placemarks[0].querySelectorAll('LineString coordinates')[0].textContent;
+                    coords = coords.split(' ').map(function(coord) {
+                        var latLng = coord.split(',');
+                        if (!isNaN(latLng[1]) && !isNaN(latLng[0])) {
+                            coordinates.push({
+                                lat: parseFloat(latLng[1]),
+                                lng: parseFloat(latLng[0])
+                            });
+                        }
+                    });
+                    var map = new google.maps.Map(document.getElementById('map'), {
+                        center: {
+                            lat: parseFloat(coordinates[0]['lat']),
+                            lng: parseFloat(coordinates[0]['lng'])
+                        },
+                        zoom: 10
+                    });
+                }
+                for (var i = 0; i < placemarks.length; i++) {
+                    var placemark = placemarks[i];
+                    var name = placemark.querySelector('name') ? placemark.querySelector('name').textContent : '';
+                    var description = placemark.querySelector('description') ? placemark.querySelector('description')
+                        .textContent : '';
+                    var styleUrl = placemark.querySelector('styleUrl').textContent;
+                    console.log(name, styleUrl);
+                    var coordinates = [];
+                    // Create markers, polygons, or polylines based on geometry type
+                    if (placemark.querySelector('Point')) {
+                        coordinates = placemark.querySelector('Point coordinates').textContent.split(',');
+                        if (coordinates.length > 0) {
+                            var icon = styles[styleUrl.substr(1)].querySelectorAll('IconStyle href')[0].textContent;
+                            var marker = new google.maps.Marker({
+                                position: {
+                                    lat: parseFloat(coordinates[1]),
+                                    lng: parseFloat(coordinates[0])
+                                },
+                                map: map,
+                                title: name,
+                                content: description,
+                                icon: icon
+                            });
+                            var infowindow = new google.maps.InfoWindow({
+                                content: description
+                            });
+                            marker.addListener('click', function() {
+                                infowindow.open(map, marker);
+                            });
+                        }
+                    } else if (placemark.querySelector('Polygon')) {
+                        var coords = placemark.querySelectorAll('Polygon coordinates')[0].textContent;
+                        coords = coords.split('\n              ').map(function(coord) {
+                            var latLng = coord.split(',');
+                            if (!isNaN(latLng[1]) && !isNaN(latLng[0])) {
+                                coordinates.push({
+                                    lat: parseFloat(latLng[1]),
+                                    lng: parseFloat(latLng[0])
+                                });
+                            }
+                        });
+                        if (coordinates.length > 0) {
+                            var color = styles[styleUrl.substr(1)].querySelectorAll('PolyStyle color')[0]
+                                .textContent;
+                            var width = styles[styleUrl.substr(1)].querySelectorAll('LineStyle width')[0]
+                                .textContent;
+                            var lineColor = styles[styleUrl.substr(1)].querySelectorAll('LineStyle color')[0]
+                                .textContent;
+                            var fill = styles[styleUrl.substr(1)].querySelectorAll('PolyStyle fill')[0].textContent;
+                            var outline = styles[styleUrl.substr(1)].querySelectorAll('PolyStyle outline')[0]
+                                .textContent;
+                            var polygon = new google.maps.Polygon({
+                                paths: coordinates,
+                                map: map,
+                                title: name,
+                                description: description,
+                                strokeColor: '#' + lineColor,
+                                strokeWeight: width, // Customize polygon fill color
+                                strokeOpacity: outline,
+                                fillColor: '#' + color,
+                                fillOpacity: fill
+                            });
+                        }
+                    } else if (placemark.querySelector('LineString')) {
+                        var coords = placemark.querySelectorAll('LineString coordinates')[0].textContent;
+                        coords = coords.split(' ').map(function(coord) {
+                            var latLng = coord.split(',');
+                            if (!isNaN(latLng[1]) && !isNaN(latLng[0])) {
+                                coordinates.push({
+                                    lat: parseFloat(latLng[1]),
+                                    lng: parseFloat(latLng[0])
+                                });
+                            }
+                        });
+                        if (coordinates.length > 0) {
+                            var color = styles[styleUrl.substr(1)].querySelectorAll('LineStyle color')[0]
+                                .textContent;
+                            var width = styles[styleUrl.substr(1)].querySelectorAll('LineStyle width')[0]
+                                .textContent;
+                            var polyline = new google.maps.Polyline({
+                                path: coordinates,
+                                map: map,
+                                title: name,
+                                description: description,
+                                strokeColor: '#' + color,
+                                strokeWeight: width
+                            });
+                        }
+                    }
                 }
             @else
                 var map = new google.maps.Map(document.getElementById('map'), {
@@ -63,16 +187,6 @@
                     zoom: 12
                 });
             @endif
-        }
-
-        function isKMLValid(kmlContent) {
-            try {
-                var parser = new DOMParser();
-                var xmlDoc = parser.parseFromString(kmlContent, 'text/xml');
-                return xmlDoc.documentElement.nodeName === 'kml';
-            } catch (error) {
-                return false;
-            }
         }
     </script>
 @endsection

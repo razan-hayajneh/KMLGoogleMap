@@ -4,7 +4,7 @@
     <div class="card-body">
         <div class="row ">
             @include('kmlFiles.fields')
-            {!! Form::submit('Save', ['class' => 'btn btn-primary ','style'=>'height:40px;margin:20px']) !!}
+            {!! Form::submit('Save', ['class' => 'btn btn-primary ','style'=>'height:40px;margin-block:30px;margin-inline:40px']) !!}
         </div>
     </div>
     {!! Form::close() !!}
